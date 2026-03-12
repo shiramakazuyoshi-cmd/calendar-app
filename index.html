@@ -1,0 +1,668 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>カレンダー連携アプリ</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0e0e14;
+    --surface: #16161f;
+    --surface2: #1e1e2e;
+    --border: #2a2a3e;
+    --accent: #7c6af7;
+    --accent2: #4fc3f7;
+    --text: #e8e8f0;
+    --text2: #8888a8;
+    --success: #4caf82;
+    --error: #f76a6a;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Noto Sans JP', sans-serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  /* Header */
+  header {
+    width: 100%;
+    padding: 20px 40px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+  }
+  .logo {
+    font-family: 'Space Mono', monospace;
+    font-size: 16px;
+    color: var(--accent);
+    letter-spacing: 2px;
+  }
+  .logo span { color: var(--accent2); }
+
+  /* API Setup Banner */
+  #setup-banner {
+    width: 100%;
+    max-width: 900px;
+    margin: 24px auto 0;
+    background: linear-gradient(135deg, #1a1a2e, #16213e);
+    border: 1px solid var(--accent);
+    border-radius: 12px;
+    padding: 20px 24px;
+    position: relative;
+    overflow: hidden;
+  }
+  #setup-banner::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0; height: 2px;
+    background: linear-gradient(90deg, var(--accent), var(--accent2));
+  }
+  .setup-title {
+    font-family: 'Space Mono', monospace;
+    font-size: 12px;
+    letter-spacing: 3px;
+    color: var(--accent2);
+    margin-bottom: 12px;
+    text-transform: uppercase;
+  }
+  .setup-steps {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+  .step {
+    background: rgba(255,255,255,0.04);
+    border-radius: 8px;
+    padding: 12px;
+    font-size: 12px;
+    color: var(--text2);
+    line-height: 1.6;
+  }
+  .step strong { color: var(--text); display: block; margin-bottom: 4px; }
+  .step-num {
+    display: inline-block;
+    width: 20px; height: 20px;
+    background: var(--accent);
+    border-radius: 50%;
+    text-align: center;
+    line-height: 20px;
+    font-size: 11px;
+    margin-bottom: 6px;
+    color: white;
+  }
+
+  .api-input-row {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  .api-input-row input {
+    flex: 1;
+    min-width: 200px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 14px;
+    color: var(--text);
+    font-family: 'Space Mono', monospace;
+    font-size: 12px;
+  }
+  .api-input-row input:focus { outline: none; border-color: var(--accent); }
+  .btn {
+    padding: 10px 20px;
+    border-radius: 8px;
+    border: none;
+    cursor: pointer;
+    font-family: 'Noto Sans JP', sans-serif;
+    font-size: 13px;
+    font-weight: 500;
+    transition: all 0.2s;
+  }
+  .btn-primary {
+    background: var(--accent);
+    color: white;
+  }
+  .btn-primary:hover { background: #9580ff; transform: translateY(-1px); }
+  .btn-secondary {
+    background: transparent;
+    color: var(--accent2);
+    border: 1px solid var(--accent2);
+  }
+  .btn-secondary:hover { background: rgba(79,195,247,0.1); }
+  .btn-success { background: var(--success); color: white; }
+  .btn-danger { background: transparent; color: var(--error); border: 1px solid var(--error); }
+  .btn-danger:hover { background: rgba(247,106,106,0.1); }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+
+  #auth-status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    padding: 8px 12px;
+    border-radius: 8px;
+  }
+  .status-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--error);
+  }
+  .status-dot.connected { background: var(--success); animation: pulse 2s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.5} }
+
+  /* Main layout */
+  main {
+    width: 100%;
+    max-width: 900px;
+    padding: 24px 20px 60px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+  }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    overflow: hidden;
+  }
+  .card-header {
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .card-icon {
+    width: 32px; height: 32px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+  }
+  .card-icon.add { background: rgba(124,106,247,0.15); }
+  .card-icon.view { background: rgba(79,195,247,0.15); }
+  .card-title {
+    font-weight: 500;
+    font-size: 15px;
+  }
+  .card-body { padding: 20px; }
+
+  /* Form elements */
+  .form-group { margin-bottom: 16px; }
+  label {
+    display: block;
+    font-size: 12px;
+    color: var(--text2);
+    margin-bottom: 6px;
+    letter-spacing: 0.5px;
+  }
+  input[type="text"], input[type="date"], input[type="time"], select, textarea {
+    width: 100%;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 12px;
+    color: var(--text);
+    font-family: 'Noto Sans JP', sans-serif;
+    font-size: 14px;
+    transition: border-color 0.2s;
+    -webkit-appearance: none;
+  }
+  input:focus, select:focus, textarea:focus {
+    outline: none;
+    border-color: var(--accent);
+  }
+  select option { background: var(--surface2); }
+  textarea { resize: vertical; min-height: 60px; }
+
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+  /* Day selector */
+  .day-selector {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 4px;
+  }
+  .day-btn {
+    padding: 8px 4px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--surface2);
+    color: var(--text2);
+    font-size: 12px;
+    cursor: pointer;
+    text-align: center;
+    transition: all 0.2s;
+  }
+  .day-btn:hover { border-color: var(--accent); color: var(--text); }
+  .day-btn.active { background: var(--accent); border-color: var(--accent); color: white; }
+
+  /* Event list */
+  #events-list { min-height: 120px; }
+  .event-item {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 14px;
+    margin-bottom: 10px;
+    position: relative;
+    border-left: 3px solid var(--accent);
+    animation: slideIn 0.3s ease;
+  }
+  @keyframes slideIn { from { opacity:0; transform:translateY(-8px); } to { opacity:1; transform:translateY(0); } }
+  .event-title { font-weight: 500; font-size: 14px; margin-bottom: 4px; }
+  .event-time { font-size: 12px; color: var(--accent2); font-family: 'Space Mono', monospace; }
+  .event-desc { font-size: 12px; color: var(--text2); margin-top: 4px; }
+  .empty-state {
+    text-align: center;
+    padding: 40px 20px;
+    color: var(--text2);
+    font-size: 13px;
+  }
+  .empty-state .icon { font-size: 36px; margin-bottom: 10px; opacity: 0.4; }
+
+  /* Toast */
+  #toast {
+    position: fixed;
+    bottom: 30px;
+    left: 50%;
+    transform: translateX(-50%) translateY(80px);
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 20px;
+    font-size: 13px;
+    transition: transform 0.3s ease;
+    z-index: 999;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 260px;
+    justify-content: center;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+  }
+  #toast.show { transform: translateX(-50%) translateY(0); }
+  #toast.success { border-color: var(--success); color: var(--success); }
+  #toast.error { border-color: var(--error); color: var(--error); }
+
+  /* Loading */
+  .spinner {
+    display: inline-block;
+    width: 14px; height: 14px;
+    border: 2px solid rgba(255,255,255,0.2);
+    border-top-color: white;
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+    vertical-align: middle;
+    margin-right: 6px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  @media (max-width: 680px) {
+    main { grid-template-columns: 1fr; }
+    header { padding: 16px 20px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">CAL<span>SYNC</span></div>
+  <div id="auth-status">
+    <div class="status-dot" id="status-dot"></div>
+    <span id="status-text">未接続</span>
+  </div>
+</header>
+
+<!-- API Setup -->
+<div id="setup-banner" style="padding:20px 24px;">
+  <div class="setup-title">🔑 Google Calendar API セットアップ</div>
+  <div class="setup-steps">
+    <div class="step">
+      <div class="step-num">1</div>
+      <strong>Google Cloud Console</strong>
+      <a href="https://console.cloud.google.com" target="_blank" style="color:var(--accent2)">console.cloud.google.com</a> を開く
+    </div>
+    <div class="step">
+      <div class="step-num">2</div>
+      <strong>新規プロジェクト作成</strong>
+      「新しいプロジェクト」→ プロジェクト名を入力 → 作成
+    </div>
+    <div class="step">
+      <div class="step-num">3</div>
+      <strong>Calendar API 有効化</strong>
+      「APIとサービス」→「ライブラリ」→「Google Calendar API」→ 有効化
+    </div>
+    <div class="step">
+      <div class="step-num">4</div>
+      <strong>OAuthクライアントID作成</strong>
+      「認証情報」→「+認証情報を作成」→「OAuthクライアントID」→「ウェブアプリ」
+    </div>
+    <div class="step">
+      <div class="step-num">5</div>
+      <strong>オリジンを追加</strong>
+      「承認済みのJavaScriptオリジン」に <code style="color:var(--accent2);font-size:11px">http://localhost</code> と <code style="color:var(--accent2);font-size:11px">http://127.0.0.1</code> を追加
+    </div>
+    <div class="step">
+      <div class="step-num">6</div>
+      <strong>クライアントIDをコピー</strong>
+      作成されたクライアントID（〜.apps.googleusercontent.com）をコピー
+    </div>
+  </div>
+  <div class="api-input-row">
+    <input type="text" id="client-id-input" placeholder="クライアントID（〜.apps.googleusercontent.com）を貼り付け" />
+    <button class="btn btn-primary" onclick="initGapi()">接続する</button>
+    <button class="btn btn-secondary" onclick="toggleSetup()">閉じる</button>
+  </div>
+</div>
+
+<main>
+  <!-- Add Event Card -->
+  <div class="card">
+    <div class="card-header">
+      <div class="card-icon add">📅</div>
+      <div>
+        <div class="card-title">予定を追加</div>
+      </div>
+    </div>
+    <div class="card-body">
+      <div class="form-group">
+        <label>タイトル</label>
+        <input type="text" id="event-title" placeholder="例：会議、ランチ、勉強" />
+      </div>
+      <div class="form-group">
+        <label>日付</label>
+        <input type="date" id="event-date" />
+      </div>
+      <div class="row">
+        <div class="form-group">
+          <label>開始時間</label>
+          <input type="time" id="event-start" />
+        </div>
+        <div class="form-group">
+          <label>終了時間</label>
+          <input type="time" id="event-end" />
+        </div>
+      </div>
+      <div class="form-group">
+        <label>メモ（任意）</label>
+        <textarea id="event-desc" placeholder="詳細やメモを入力..."></textarea>
+      </div>
+      <button class="btn btn-primary" id="add-btn" style="width:100%" onclick="addEvent()">
+        Googleカレンダーに追加
+      </button>
+    </div>
+  </div>
+
+  <!-- View Events Card -->
+  <div class="card">
+    <div class="card-header">
+      <div class="card-icon view">🔍</div>
+      <div>
+        <div class="card-title">予定を確認</div>
+      </div>
+    </div>
+    <div class="card-body">
+      <div class="form-group">
+        <label>日付を選択</label>
+        <input type="date" id="search-date" />
+      </div>
+      <div class="row" style="margin-bottom:16px">
+        <div class="form-group" style="margin-bottom:0">
+          <label>開始時間（任意）</label>
+          <input type="time" id="search-start" />
+        </div>
+        <div class="form-group" style="margin-bottom:0">
+          <label>終了時間（任意）</label>
+          <input type="time" id="search-end" />
+        </div>
+      </div>
+      <button class="btn btn-secondary" id="search-btn" style="width:100%;margin-bottom:16px" onclick="searchEvents()">
+        予定を検索
+      </button>
+      <div id="events-list">
+        <div class="empty-state">
+          <div class="icon">📆</div>
+          日付を選んで検索してください
+        </div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<div id="toast"></div>
+
+<!-- Google API Script -->
+<script src="https://apis.google.com/js/api.js"></script>
+<script src="https://accounts.google.com/gsi/client"></script>
+
+<script>
+let tokenClient = null;
+let accessToken = null;
+let CLIENT_ID = '307855928755-ldh4somr5bbjp895eq4m43mtjcea22io.apps.googleusercontent.com';
+const SCOPES = 'https://www.googleapis.com/auth/calendar';
+
+// Set today's date as default
+const today = new Date().toISOString().split('T')[0];
+document.getElementById('event-date').value = today;
+document.getElementById('search-date').value = today;
+
+// Auto-connect on page load
+window.addEventListener('load', () => {
+  document.getElementById('setup-banner').style.display = 'none';
+  setTimeout(() => {
+    try {
+      tokenClient = google.accounts.oauth2.initTokenClient({
+        client_id: CLIENT_ID,
+        scope: SCOPES,
+        callback: (response) => {
+          if (response.error) {
+            tokenClient.requestAccessToken();
+            return;
+          }
+          accessToken = response.access_token;
+          setStatus(true);
+          showToast('Googleカレンダーに接続しました！');
+        },
+      });
+      tokenClient.requestAccessToken({ prompt: 'none' });
+    } catch(e) {}
+  }, 800);
+});
+
+function toggleSetup() {
+  const banner = document.getElementById('setup-banner');
+  banner.style.display = banner.style.display === 'none' ? 'block' : 'none';
+}
+
+function showToast(msg, type = 'success') {
+  const t = document.getElementById('toast');
+  t.textContent = (type === 'success' ? '✅ ' : '❌ ') + msg;
+  t.className = `show ${type}`;
+  setTimeout(() => t.className = '', 3000);
+}
+
+function setStatus(connected) {
+  const dot = document.getElementById('status-dot');
+  const text = document.getElementById('status-text');
+  if (connected) {
+    dot.className = 'status-dot connected';
+    text.textContent = '接続済み';
+  } else {
+    dot.className = 'status-dot';
+    text.textContent = '未接続';
+  }
+}
+
+function initGapi() {
+  CLIENT_ID = document.getElementById('client-id-input').value.trim();
+  if (!CLIENT_ID) {
+    showToast('クライアントIDを入力してください', 'error');
+    return;
+  }
+
+  try {
+    tokenClient = google.accounts.oauth2.initTokenClient({
+      client_id: CLIENT_ID,
+      scope: SCOPES,
+      callback: (response) => {
+        if (response.error) {
+          showToast('認証エラー: ' + response.error, 'error');
+          return;
+        }
+        accessToken = response.access_token;
+        setStatus(true);
+        showToast('Googleカレンダーに接続しました！');
+        document.getElementById('setup-banner').style.display = 'none';
+      },
+    });
+    tokenClient.requestAccessToken();
+  } catch (e) {
+    showToast('初期化エラー。クライアントIDを確認してください', 'error');
+  }
+}
+
+async function addEvent() {
+  if (!accessToken) {
+    showToast('先にGoogleカレンダーへ接続してください', 'error');
+    return;
+  }
+
+  const title = document.getElementById('event-title').value.trim();
+  const date = document.getElementById('event-date').value;
+  const start = document.getElementById('event-start').value;
+  const end = document.getElementById('event-end').value;
+  const desc = document.getElementById('event-desc').value.trim();
+
+  if (!title || !date || !start || !end) {
+    showToast('タイトル・日付・時間を入力してください', 'error');
+    return;
+  }
+
+  const btn = document.getElementById('add-btn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span>追加中...';
+
+  const event = {
+    summary: title,
+    description: desc,
+    start: { dateTime: `${date}T${start}:00`, timeZone: 'Asia/Tokyo' },
+    end: { dateTime: `${date}T${end}:00`, timeZone: 'Asia/Tokyo' }
+  };
+
+  try {
+    const res = await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(event)
+    });
+
+    if (res.ok) {
+      showToast('予定を追加しました！');
+      document.getElementById('event-title').value = '';
+      document.getElementById('event-start').value = '';
+      document.getElementById('event-end').value = '';
+      document.getElementById('event-desc').value = '';
+    } else {
+      const err = await res.json();
+      showToast('エラー: ' + (err.error?.message || '追加失敗'), 'error');
+    }
+  } catch (e) {
+    showToast('ネットワークエラーが発生しました', 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Googleカレンダーに追加';
+  }
+}
+
+async function searchEvents() {
+  if (!accessToken) {
+    showToast('先にGoogleカレンダーへ接続してください', 'error');
+    return;
+  }
+
+  const date = document.getElementById('search-date').value;
+  const startTime = document.getElementById('search-start').value;
+  const endTime = document.getElementById('search-end').value;
+
+  if (!date) {
+    showToast('日付を選択してください', 'error');
+    return;
+  }
+
+  const btn = document.getElementById('search-btn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span>検索中...';
+
+  const timeMin = startTime
+    ? `${date}T${startTime}:00+09:00`
+    : `${date}T00:00:00+09:00`;
+  const timeMax = endTime
+    ? `${date}T${endTime}:00+09:00`
+    : `${date}T23:59:59+09:00`;
+
+  try {
+    const url = `https://www.googleapis.com/calendar/v3/calendars/primary/events?timeMin=${encodeURIComponent(timeMin)}&timeMax=${encodeURIComponent(timeMax)}&singleEvents=true&orderBy=startTime`;
+    const res = await fetch(url, {
+      headers: { 'Authorization': `Bearer ${accessToken}` }
+    });
+
+    if (!res.ok) throw new Error('API error');
+    const data = await res.json();
+    renderEvents(data.items || [], date);
+  } catch (e) {
+    showToast('予定の取得に失敗しました', 'error');
+    document.getElementById('events-list').innerHTML = '<div class="empty-state"><div class="icon">⚠️</div>取得エラーが発生しました</div>';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '予定を検索';
+  }
+}
+
+function renderEvents(events, date) {
+  const list = document.getElementById('events-list');
+  if (!events.length) {
+    list.innerHTML = '<div class="empty-state"><div class="icon">🕊️</div>この時間帯に予定はありません</div>';
+    return;
+  }
+
+  const html = events.map(ev => {
+    const start = ev.start?.dateTime ? new Date(ev.start.dateTime) : null;
+    const end = ev.end?.dateTime ? new Date(ev.end.dateTime) : null;
+    const timeStr = start && end
+      ? `${start.getHours().toString().padStart(2,'0')}:${start.getMinutes().toString().padStart(2,'0')} - ${end.getHours().toString().padStart(2,'0')}:${end.getMinutes().toString().padStart(2,'0')}`
+      : '終日';
+    return `
+      <div class="event-item">
+        <div class="event-title">${escHtml(ev.summary || '（タイトルなし）')}</div>
+        <div class="event-time">🕐 ${timeStr}</div>
+        ${ev.description ? `<div class="event-desc">${escHtml(ev.description)}</div>` : ''}
+      </div>
+    `;
+  }).join('');
+  list.innerHTML = html;
+}
+
+function escHtml(str) {
+  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+</script>
+</body>
+</html>
